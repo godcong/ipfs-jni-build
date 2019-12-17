@@ -73,7 +73,7 @@ func loadPlugins(repoPath string) (*loader.PluginLoader, error) {
 	return plugins, nil
 }
 
-func Call(args ...string) int {
+func Call(args []string) int {
 	rand.Seed(time.Now().UnixNano())
 	ctx := logging.ContextWithLoggable(context.Background(), loggables.Uuid("session"))
 	var err error
