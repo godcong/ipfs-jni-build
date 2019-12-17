@@ -62,17 +62,8 @@ func loadPlugins(repoPath string) (*loader.PluginLoader, error) {
 	return plugins, nil
 }
 
-// main roadmap:
-// - parse the commandline to get a cmdInvocation
-// - if user requests help, print it and exit.
-// - run the command invocation
-// - output the response
-// - if anything fails, print error, maybe with help
-func main() {
-	os.Exit(mainRet())
-}
-
-func mainRet() int {
+//JNIRun run command with jni
+func JNIRun(args ...string) int {
 	rand.Seed(time.Now().UnixNano())
 	ctx := logging.ContextWithLoggable(context.Background(), loggables.Uuid("session"))
 	var err error
@@ -94,30 +85,30 @@ func mainRet() int {
 	defer intrh.Close()
 
 	// Handle `ipfs version` or `ipfs help`
-	if len(os.Args) > 1 {
+	if len(args) > 1 {
 		// Handle `ipfs --version'
-		if os.Args[1] == "--version" {
-			os.Args[1] = "version"
+		if args[1] == "--version" {
+			args[1] = "version"
 		}
 
 		//Handle `ipfs help` and `ipfs help <sub-command>`
-		if os.Args[1] == "help" {
-			if len(os.Args) > 2 {
-				os.Args = append(os.Args[:1], os.Args[2:]...)
+		if args[1] == "help" {
+			if len(args) > 2 {
+				args = append(args[:1], args[2:]...)
 				// Handle `ipfs help --help`
 				// append `--help`,when the command is not `ipfs help --help`
-				if os.Args[1] != "--help" {
-					os.Args = append(os.Args, "--help")
+				if args[1] != "--help" {
+					args = append(args, "--help")
 				}
 			} else {
-				os.Args[1] = "--help"
+				args[1] = "--help"
 			}
 		}
 	}
 
-	// output depends on executable name passed in os.Args
+	// output depends on executable name passed in args
 	// so we need to make sure it's stable
-	os.Args[0] = "ipfs"
+	args[0] = "ipfs"
 
 	buildEnv := func(ctx context.Context, req *cmds.Request) (cmds.Environment, error) {
 		checkDebug(req)
@@ -163,7 +154,7 @@ func mainRet() int {
 		}, nil
 	}
 
-	err = cli.Run(ctx, Root, os.Args, os.Stdin, os.Stdout, os.Stderr, buildEnv, makeExecutor)
+	err = cli.Run(ctx, Root, args, os.Stdin, os.Stdout, os.Stderr, buildEnv, makeExecutor)
 	if err != nil {
 		return 1
 	}
