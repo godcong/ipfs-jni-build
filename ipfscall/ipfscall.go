@@ -94,7 +94,7 @@ func Call(p string) int {
 	intrh, ctx := util.SetupInterruptHandler(ctx)
 	defer intrh.Close()
 
-	args := strings.Split(p, ",")
+	args := strings.Split(p, " ")
 	// Handle `ipfs version` or `ipfs help`
 	if len(args) > 1 {
 		// Handle `ipfs --version'
