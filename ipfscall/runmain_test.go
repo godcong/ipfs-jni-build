@@ -1,6 +1,6 @@
 // +build testrunmain
 
-package jni
+package ipfscall
 
 import (
 	"flag"

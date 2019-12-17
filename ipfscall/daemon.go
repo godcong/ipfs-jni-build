@@ -1,4 +1,4 @@
-package jni
+package ipfscall
 
 import (
 	"errors"
