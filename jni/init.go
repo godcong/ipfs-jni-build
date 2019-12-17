@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
+	"path"
 	"strings"
 
 	assets "github.com/ipfs/go-ipfs/assets"
@@ -16,9 +16,9 @@ import (
 	namesys "github.com/ipfs/go-ipfs/namesys"
 	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
 
-	cmds "github.com/ipfs/go-ipfs-cmds"
-	config "github.com/ipfs/go-ipfs-config"
-	files "github.com/ipfs/go-ipfs-files"
+	"github.com/ipfs/go-ipfs-cmds"
+	"github.com/ipfs/go-ipfs-config"
+	"github.com/ipfs/go-ipfs-files"
 )
 
 const (
@@ -27,10 +27,6 @@ const (
 	emptyRepoOptionName    = "empty-repo"
 	profileOptionName      = "profile"
 )
-
-var errRepoExists = errors.New(`ipfs configuration file already exists!
-Reinitializing would overwrite your keys.
-`)
 
 var initCmd = &cmds.Command{
 	Helptext: cmds.HelpText{
@@ -106,30 +102,31 @@ environment variable:
 			}
 		}
 
-		profiles, _ := req.Options[profileOptionName].(string)
+		profile, _ := req.Options[profileOptionName].(string)
+
+		var profiles []string
+		if profile != "" {
+			profiles = strings.Split(profile, ",")
+		}
+
 		return doInit(os.Stdout, cctx.ConfigRoot, empty, nBitsForKeypair, profiles, conf)
 	},
 }
 
-func applyProfiles(conf *config.Config, profiles string) error {
-	if profiles == "" {
-		return nil
+var errRepoExists = errors.New(`ipfs configuration file already exists!
+Reinitializing would overwrite your keys.
+`)
+
+func initWithDefaults(out io.Writer, repoRoot string, profile string) error {
+	var profiles []string
+	if profile != "" {
+		profiles = strings.Split(profile, ",")
 	}
 
-	for _, profile := range strings.Split(profiles, ",") {
-		transformer, ok := config.Profiles[profile]
-		if !ok {
-			return fmt.Errorf("invalid configuration profile: %s", profile)
-		}
-
-		if err := transformer.Transform(conf); err != nil {
-			return err
-		}
-	}
-	return nil
+	return doInit(out, repoRoot, false, nBitsForKeypairDefault, profiles, nil)
 }
 
-func doInit(out io.Writer, repoRoot string, empty bool, nBitsForKeypair int, confProfiles string, conf *config.Config) error {
+func doInit(out io.Writer, repoRoot string, empty bool, nBitsForKeypair int, confProfiles []string, conf *config.Config) error {
 	if _, err := fmt.Fprintf(out, "initializing IPFS node at %s\n", repoRoot); err != nil {
 		return err
 	}
@@ -150,8 +147,15 @@ func doInit(out io.Writer, repoRoot string, empty bool, nBitsForKeypair int, con
 		}
 	}
 
-	if err := applyProfiles(conf, confProfiles); err != nil {
-		return err
+	for _, profile := range confProfiles {
+		transformer, ok := config.Profiles[profile]
+		if !ok {
+			return fmt.Errorf("invalid configuration profile: %s", profile)
+		}
+
+		if err := transformer.Transform(conf); err != nil {
+			return err
+		}
 	}
 
 	if err := fsrepo.Init(repoRoot, conf); err != nil {
@@ -171,7 +175,7 @@ func checkWritable(dir string) error {
 	_, err := os.Stat(dir)
 	if err == nil {
 		// dir exists, make sure we can write to it
-		testfile := filepath.Join(dir, "test")
+		testfile := path.Join(dir, "test")
 		fi, err := os.Create(testfile)
 		if err != nil {
 			if os.IsPermission(err) {
