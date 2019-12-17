@@ -73,7 +73,7 @@ func loadPlugins(repoPath string) (*loader.PluginLoader, error) {
 	return plugins, nil
 }
 
-func Call(args []string) int {
+func Call(p string) int {
 	rand.Seed(time.Now().UnixNano())
 	ctx := logging.ContextWithLoggable(context.Background(), loggables.Uuid("session"))
 	var err error
@@ -94,6 +94,7 @@ func Call(args []string) int {
 	intrh, ctx := util.SetupInterruptHandler(ctx)
 	defer intrh.Close()
 
+	args := strings.Split(p, ",")
 	// Handle `ipfs version` or `ipfs help`
 	if len(args) > 1 {
 		// Handle `ipfs --version'
