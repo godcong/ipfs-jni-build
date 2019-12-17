@@ -1,6 +1,6 @@
 // +build testrunmain
 
-package main
+package jni
 
 import (
 	"flag"

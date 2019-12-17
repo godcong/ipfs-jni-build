@@ -1,6 +1,6 @@
 // +build linux
 
-package main
+package jni
 
 import (
 	daemon "github.com/coreos/go-systemd/daemon"

@@ -1,5 +1,5 @@
 // cmd/ipfs implements the primary CLI binary for ipfs
-package main
+package jni
 
 import (
 	"context"
