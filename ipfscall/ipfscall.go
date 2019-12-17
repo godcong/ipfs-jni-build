@@ -73,16 +73,105 @@ func loadPlugins(repoPath string) (*loader.PluginLoader, error) {
 	return plugins, nil
 }
 
-// main roadmap:
-// - parse the commandline to get a cmdInvocation
-// - if user requests help, print it and exit.
-// - run the command invocation
-// - output the response
-// - if anything fails, print error, maybe with help
-func main() {
-	os.Exit(mainRet())
-}
+func Call(args ...string) int {
+	rand.Seed(time.Now().UnixNano())
+	ctx := logging.ContextWithLoggable(context.Background(), loggables.Uuid("session"))
+	var err error
 
+	// we'll call this local helper to output errors.
+	// this is so we control how to print errors in one place.
+	printErr := func(err error) {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
+	}
+
+	stopFunc, err := profileIfEnabled()
+	if err != nil {
+		printErr(err)
+		return 1
+	}
+	defer stopFunc() // to be executed as late as possible
+
+	intrh, ctx := util.SetupInterruptHandler(ctx)
+	defer intrh.Close()
+
+	// Handle `ipfs version` or `ipfs help`
+	if len(args) > 1 {
+		// Handle `ipfs --version'
+		if args[1] == "--version" {
+			args[1] = "version"
+		}
+
+		//Handle `ipfs help` and `ipfs help <sub-command>`
+		if args[1] == "help" {
+			if len(args) > 2 {
+				args = append(args[:1], args[2:]...)
+				// Handle `ipfs help --help`
+				// append `--help`,when the command is not `ipfs help --help`
+				if args[1] != "--help" {
+					args = append(args, "--help")
+				}
+			} else {
+				args[1] = "--help"
+			}
+		}
+	}
+
+	// output depends on executable name passed in args
+	// so we need to make sure it's stable
+	args[0] = "ipfs"
+
+	buildEnv := func(ctx context.Context, req *cmds.Request) (cmds.Environment, error) {
+		checkDebug(req)
+		repoPath, err := getRepoPath(req)
+		if err != nil {
+			return nil, err
+		}
+		log.Debugf("config path is %s", repoPath)
+
+		plugins, err := loadPlugins(repoPath)
+		if err != nil {
+			return nil, err
+		}
+
+		// this sets up the function that will initialize the node
+		// this is so that we can construct the node lazily.
+		return &oldcmds.Context{
+			ConfigRoot: repoPath,
+			LoadConfig: loadConfig,
+			ReqLog:     &oldcmds.ReqLog{},
+			Plugins:    plugins,
+			ConstructNode: func() (n *core.IpfsNode, err error) {
+				if req == nil {
+					return nil, errors.New("constructing node without a request")
+				}
+
+				r, err := fsrepo.Open(repoPath)
+				if err != nil { // repo is owned by the node
+					return nil, err
+				}
+
+				// ok everything is good. set it on the invocation (for ownership)
+				// and return it.
+				n, err = core.NewNode(ctx, &core.BuildCfg{
+					Repo: r,
+				})
+				if err != nil {
+					return nil, err
+				}
+
+				return n, nil
+			},
+		}, nil
+	}
+
+	err = cli.Run(ctx, Root, args, os.Stdin, os.Stdout, os.Stderr, buildEnv, makeExecutor)
+	if err != nil {
+		return 1
+	}
+
+	// everything went better than expected :)
+	return 0
+}
 func mainRet() int {
 	rand.Seed(time.Now().UnixNano())
 	ctx := logging.ContextWithLoggable(context.Background(), loggables.Uuid("session"))
