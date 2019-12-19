@@ -34,6 +34,10 @@ import (
 	manet "github.com/multiformats/go-multiaddr-net"
 )
 
+const ipfsinit = "ipfs init --profile=badgerds,lowpower,randomports"
+const ipfsdaemonOffline = "ipfs daemon --offline=true"
+const ipfsdaemonOnline = "ipfs daemon --offline=false"
+
 // log is the command logger
 var log = logging.Logger("cmd/ipfs")
 
@@ -73,21 +77,25 @@ func loadPlugins(repoPath string) (*loader.PluginLoader, error) {
 	return plugins, nil
 }
 
-func Call(p string) int {
+func Dameon(b bool) error {
+	if b {
+		return call(ipfsdaemonOnline)
+	}
+	return call(ipfsdaemonOffline)
+}
+
+func Init() error {
+	return call(ipfsinit)
+}
+
+func call(p string) error {
 	rand.Seed(time.Now().UnixNano())
 	ctx := logging.ContextWithLoggable(context.Background(), loggables.Uuid("session"))
 	var err error
 
-	// we'll call this local helper to output errors.
-	// this is so we control how to print errors in one place.
-	printErr := func(err error) {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
-	}
-
 	stopFunc, err := profileIfEnabled()
 	if err != nil {
-		printErr(err)
-		return 1
+		return err
 	}
 	defer stopFunc() // to be executed as late as possible
 
@@ -95,28 +103,6 @@ func Call(p string) int {
 	defer intrh.Close()
 
 	args := strings.Split(p, " ")
-	// Handle `ipfs version` or `ipfs help`
-	if len(args) > 1 {
-		// Handle `ipfs --version'
-		if args[1] == "--version" {
-			args[1] = "version"
-		}
-
-		//Handle `ipfs help` and `ipfs help <sub-command>`
-		if args[1] == "help" {
-			if len(args) > 2 {
-				args = append(args[:1], args[2:]...)
-				// Handle `ipfs help --help`
-				// append `--help`,when the command is not `ipfs help --help`
-				if args[1] != "--help" {
-					args = append(args, "--help")
-				}
-			} else {
-				args[1] = "--help"
-			}
-		}
-	}
-
 	// output depends on executable name passed in args
 	// so we need to make sure it's stable
 	args[0] = "ipfs"
@@ -167,12 +153,11 @@ func Call(p string) int {
 
 	err = cli.Run(ctx, Root, args, os.Stdin, os.Stdout, os.Stderr, buildEnv, makeExecutor)
 	if err != nil {
-		return 1
+		return err
 	}
-
-	// everything went better than expected :)
-	return 0
+	return nil
 }
+
 func mainRet() int {
 	rand.Seed(time.Now().UnixNano())
 	ctx := logging.ContextWithLoggable(context.Background(), loggables.Uuid("session"))
